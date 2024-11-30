@@ -1,0 +1,11 @@
+- hosts: gitlab-runner
+  become: true
+  tasks:
+    - import_tasks: ansible-tasks/gitlab-runner.ansible.yml
+  vars:
+    NUMBER_OF_CONCURRENT: 6
+    RUNNER_AUTHENTICATION_TOKEN_1: ""  # Optinal, only if you regist docker runners
+    RUNNER_AUTHENTICATION_TOKEN_2: ""
+    GITLAB_URL: "https://gitlab.emddi.xyz/"
+  tags:
+    - gitlab-runner

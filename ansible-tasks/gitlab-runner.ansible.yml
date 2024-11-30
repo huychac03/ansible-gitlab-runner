@@ -1,0 +1,72 @@
+---
+- name: Install Docker
+  shell:
+    curl https://get.docker.com | sh
+
+- name: Add the Gitlab Runner official GitLab repository
+  shell: |
+    curl -L "https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh" | sudo bash
+
+- name: Check available GitLab Runner versions
+  ansible.builtin.shell: apt-cache madison gitlab-runner
+  register: gitlab_runner_versions
+
+- name: Install required GitLab Runner package
+  ansible.builtin.shell: sudo apt-get install -y gitlab-runner
+
+- name: Add gitlab-runner user to docker group
+  ansible.builtin.user:
+    name: gitlab-runner
+    groups: docker,gitlab-runner
+
+# Optional
+- name: Register Docker runners
+  command: |
+    gitlab-runner register \
+    --non-interactive \
+    --url {{ GITLAB_URL }} \
+    --registration-token "{{ RUNNER_AUTHENTICATION_TOKEN_1 }}" \
+    --executor "docker" \
+    --docker-image "docker:dind" \
+    --description "docker-runner-{{ item }}" \
+    --run-untagged="true" \
+    --locked="false" \
+    --access-level="not_protected" \
+    --tag-list "docker"
+  loop: "{{ range(1, 6) | list }}"
+
+- name: Register Shell runners
+  command: |
+    gitlab-runner register \
+    --non-interactive \
+    --url {{ GITLAB_URL }} \
+    --registration-token "{{ RUNNER_AUTHENTICATION_TOKEN_2 }}" \
+    --executor "shell" \
+    --description "shell-runner-{{ item }}" \
+    --locked="false" \
+    --access-level="not_protected" \
+    --tag-list "shell"
+  loop: "{{ range(1, 6) | list }}"
+
+- name: Modify the "concurrent number" in /etc/gitlab-runner/config.toml file
+  lineinfile:
+    path: /etc/gitlab-runner/config.toml
+    regexp: '^concurrent ='
+    line: 'concurrent = {{ NUMBER_OF_CONCURRENT }}'
+  become: yes
+
+# Optional and must have if you Regist docker runner
+- name: Rewrite the volumes line in /etc/gitlab-runner/config.toml for Docker runner if have
+  become: true
+  replace:
+    path: /etc/gitlab-runner/config.toml
+    regexp: '^\s*volumes\s*=\s*\["/cache"\]\s*$'
+    replace: '    volumes = ["/cache", "/var/run/docker.sock:/var/run/docker.sock"]'
+
+- name: Restart Gitlab Runner
+  shell:
+    gitlab-runner restart
+  
+- name: Enable Gitlab Runner as system service
+  shell:
+    systemctl enable gitlab-runner
